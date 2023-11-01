@@ -4,6 +4,7 @@ import glob
 import random
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
 
 def create_img_list(directory):
     os.chdir(directory)
