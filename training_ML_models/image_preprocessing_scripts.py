@@ -30,3 +30,7 @@ def combine_lists(datasets_list):
 def lists_to_array(combined_list):
     combined_arr = np.asarray(combined_list)
     return combined_arr
+
+
+def convert_pixel_values(input_arr):
+    return input_arr/255
