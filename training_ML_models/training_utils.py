@@ -36,7 +36,6 @@ class CNNModel:
         """
                
         model = tf.keras.Sequential()
-        print('here')
         for layer_params in model_parameters['layers']:
             layer_type = layer_params['type']
 
@@ -65,6 +64,21 @@ class CNNModel:
 
         return model
     
+    @classmethod
+    def compile_model(self, passed_model, model_params):
+        """
+        Compiles a model using the hyperparameters from the model's parameters
+        using an optimizer, loss function, and metrics.
+        """
+        params = model_params['hyperparams']
+        
+        passed_model.compile(
+        optimizer = getattr(tf.keras.optimizers, params['optimizer'])(learning_rate = params['learning_rate'], weight_decay = params['decay']),     
+        loss = params['loss_func'],
+        metrics = params['metrics'])
+
+        
+        
     def mlflow_run(self, dataset, r_name="CNN-Model-Experiment"):
         """
         This method trains, computes metrics, and logs all metrics, parameters,
@@ -87,10 +101,12 @@ class CNNModel:
 
             # train and predict
             self._rf.fit(X_train, y_train)
-            self._cnn.fit(X_train, y_train, epochs=30, class_weight=dict(enumerate(class_weights)), validation_data=(X_val, y_val))
-            
-            
-            y_pred = self._rf.predict(X_test)
+            self.compile_model(self._cnn, self._params)
+            num_epochs = self._params['training_config']['epochs']
+            class_weights = self._params['training_config']['class_weights']
+            self._cnn.fit(X_train, y_train, epochs=num_epochs, class_weight=class_weights, validation_data=(X_val, y_val))
+                        
+            y_pred = self._cnn.predict(X_test)
                       
                
             # Log model and params using the MLflow APIs
@@ -146,3 +162,9 @@ class CNNModel:
         """
         return self._cnn
     
+    @property
+    def params(self):
+      """
+      Getter for model parameters 
+      """
+      return self._params
