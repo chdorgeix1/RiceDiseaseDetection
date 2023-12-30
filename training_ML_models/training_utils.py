@@ -1,16 +1,18 @@
 import os
 import numpy as np
-# import mlflow.sklearn
+import mlflow.sklearn
 import tensorflow as tf
-# import sklearn
+import sklearn
 import keras
 from tensorflow.keras import layers, models
+from sklearn.metrics import confusion_matrix
+from  mlflow.tracking import MlflowClient
+import matplotlib.pyplot as plt 
 # from sklearn.metrics import confusion_matrix
 # from sklearn.utils.class_weight import compute_class_weight
 # from sklearn.model_selection import train_test_split
 # from sklearn.preprocessing import StandardScaler
 # from sklearn import metrics
-# from  mlflow.tracking import MlflowClient
 
 class CNNModel:
     
@@ -100,56 +102,73 @@ class CNNModel:
             y_val = datasets['y_val']
 
             # train and predict
-            self._rf.fit(X_train, y_train)
-            self.compile_model(self._cnn, self._params)
-            num_epochs = self._params['training_config']['epochs']
-            class_weights = self._params['training_config']['class_weights']
-            self._cnn.fit(X_train, y_train, epochs=num_epochs, class_weight=class_weights, validation_data=(X_val, y_val))
-                        
-            y_pred = self._cnn.predict(X_test)
-                      
-               
+            self.compile_model(self.model, self.params)
+            num_epochs = self.params['training_config']['epochs']
+            class_weights = self.params['training_config']['class_weights']
+            batch_size = self.params['training_config']['batch_size']
+            history = self.model.fit(X_train, y_train, epochs=num_epochs, batch_size = batch_size class_weight=class_weights, validation_data=(X_val, y_val))
+                                            
             # Log model and params using the MLflow APIs
             mlflow.sklearn.log_model(self.model, "cnn-class-model")
             mlflow.log_params(self.params)
 
             # compute  regression evaluation metrics 
-            mae = metrics.mean_absolute_error(y_test, y_pred)
-            mse = metrics.mean_squared_error(y_test, y_pred)
-            rmse = np.sqrt(mse)
-            r2 = metrics.r2_score(y_test, y_pred)
+#             mae = metrics.mean_absolute_error(y_test, y_pred)
+#             mse = metrics.mean_squared_error(y_test, y_pred)
+#             rmse = np.sqrt(mse)
+#             r2 = metrics.r2_score(y_test, y_pred)
+
+            y_pred = model.predict(X_val)
+            y_pred = np.argmax(y_pred, axis=1)
+            
+            confusion_matrix = confusion_matrix(y_val, y_pred)
+            
+            FP = confusion_matrix.sum(axis=0) - np.diag(confusion_matrix)  
+            FN = confusion_matrix.sum(axis=1) - np.diag(confusion_matrix)
+            TP = np.diag(confusion_matrix)
+            TN = confusion_matrix.values.sum() - (FP + FN + TP)
+            
+            precision = TP / (TP + FP)
+            recall = TP / (TP + FN)
+            f1_score = ( 2 * precision * recall ) / ( precision + recall )
+            accuracy = ( TP + TN ) / ( TP + TN + FP + FN )
 
             # Log metrics
-            mlflow.log_metric("mae", mae)
-            mlflow.log_metric("mse", mse)
-            mlflow.log_metric("rmse", rmse)
-            mlflow.log_metric("r2", r2)
-
-            # update global class instance variable with values
-            self.rmse.append(rmse)
-            self.estimators.append(self.params["n_estimators"])
-
+            mlflow.log_metric("Precision", precision)
+            mlflow.log_metric("Recall", recall)
+            mlflow.log_metric("F1 Score", f1_score)
+            mlflow.log_metric("Accuracy", accuracy)
+            mlflow.log_metric("Confusion Matrix", confusion_matrix)
+            
             # plot graphs and save as artifacts
-            (fig, ax) = Utils.plot_graphs(self.estimators, self.rmse, "Random Forest Estimators", 
-                                          "Root Mean Square", "Root Mean Square vs Estimators")
+#             (fig, ax) = Utils.plot_graphs(self.estimators, self.rmse, "Random Forest Estimators", 
+#                                           "Root Mean Square", "Root Mean Square vs Estimators")
 
             # create temporary artifact file name and log artifact
-            temp_file_name = Utils.get_temporary_directory_path("rmse_estimators-", ".png")
-            temp_name = temp_file_name.name
-            try:
-                fig.savefig(temp_name)
-                mlflow.log_artifact(temp_name, "rmse_estimators_plots")
-            finally:
-                temp_file_name.close()  # Delete the temp file
+#             temp_file_name = Utils.get_temporary_directory_path("cnn-", ".png")
+#             temp_name = temp_file_name.name
+#             try:
+#                 fig.savefig(temp_name)
+#                 mlflow.log_artifact(temp_name, "rmse_estimators_plots")
+#             finally:
+#                 temp_file_name.close()  # Delete the temp file
 
             # print some data
-            print("-" * 100)
+#             print("-" * 100)
             print("Inside MLflow Run with run_id {} and experiment_id {}".format(runID, experimentID))
-            print("Estimator trees        :", self.params["n_estimators"])
-            print('Mean Absolute Error    :', mae)
-            print('Mean Squared Error     :', mse)
-            print('Root Mean Squared Error:', rmse)
-            print('R2                     :', r2)
+            print("Precision        :", precision)
+            print('Recall           :', recall)
+            print('F1 Score         :', f1_score)
+            print('Accuracy         :', accuracy)
+            print('Confusion Matrix :', confusion_matrix)
+            
+            plt.plot(history.history['acc'])
+            plt.plot(history.history['val_acc'])
+            plt.title('model accuracy')
+            plt.ylabel('accuracy')
+            plt.xlabel('epoch')
+            plt.legend(['train', 'validation'], loc='upper left')
+            plt.show()
             
             return (experimentID, runID)
 
